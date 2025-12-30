@@ -10,6 +10,8 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_setValue
 // @grant        GM_getValue
+// @updateURL    https://github.com/1738348785/pixiv-download/raw/refs/heads/main/pixiv_downloader.user.js
+// @downloadURL  https://github.com/1738348785/pixiv-download/raw/refs/heads/main/pixiv_downloader.user.js
 // @connect      i.pximg.net
 // @connect      pixiv.net
 // @run-at       document-idle
@@ -740,5 +742,6 @@
     } else {
         init();
     }
+
 
 })();
