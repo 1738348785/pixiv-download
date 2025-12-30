@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pixiv 漫画图片批量下载器
 // @namespace    http://tampermonkey.net/
-// @version      1.0
+// @version      1.0.5
 // @description  一键下载 Pixiv 作品的所有图片并打包为 ZIP（纯原生实现，无外部依赖）
 // @author       1738348785
 // @match        https://www.pixiv.net/artworks/*
@@ -24,7 +24,7 @@
     let isPaused = false;
     let isDownloading = false;
 
-    // ============ 纯 JavaScript ZIP 实现 ============
+    // ============ JavaScript ZIP============
 
     class SimpleZip {
         constructor() {
@@ -182,7 +182,7 @@
             gap: 8px;
             align-items: center;
         }
-        .pixiv-dl-btn-container {
+        .pixiv-dl-btn-inner {
             position: relative;
         }
         .pixiv-dl-btn {
@@ -336,6 +336,15 @@
             border-radius: 2px;
             transition: width 0.3s ease;
             box-shadow: 0 0 8px rgba(0,255,136,0.5);
+        }
+        .pixiv-dl-btn-container {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .pixiv-dl-btn-container .pixiv-dl-drag-handle {
+            margin-top: 6px;
         }
         .pixiv-dl-count {
             position: absolute;
@@ -634,15 +643,16 @@
         handle.className = 'pixiv-dl-drag-handle';
         handle.title = '拖动调整位置';
 
-        const btnWrapper = document.createElement('div');
-        btnWrapper.style.position = 'relative';
-
         const btnGroup = document.createElement('div');
         btnGroup.className = 'pixiv-dl-btn-group';
 
-        // 创建下载按钮容器（用于限制进度条宽度）
+        // 创建下载按钮容器（包含按钮、进度条、拖动条和计数器）
         const btnContainer = document.createElement('div');
         btnContainer.className = 'pixiv-dl-btn-container';
+
+        // 创建按钮内部容器（用于限制进度条宽度）
+        const btnInner = document.createElement('div');
+        btnInner.className = 'pixiv-dl-btn-inner';
 
         const btn = document.createElement('button');
         btn.className = 'pixiv-dl-btn';
@@ -655,9 +665,15 @@
         progressBar.className = 'pixiv-dl-progress-bar';
         progressBar.style.width = '0%';
 
+        const countEl = document.createElement('div');
+        countEl.className = 'pixiv-dl-count';
+
         progressContainer.appendChild(progressBar);
-        btnContainer.appendChild(btn);
-        btnContainer.appendChild(progressContainer);
+        btnInner.appendChild(btn);
+        btnInner.appendChild(progressContainer);
+        btnInner.appendChild(countEl);
+        btnContainer.appendChild(btnInner);
+        btnContainer.appendChild(handle);
 
         const pauseBtn = document.createElement('button');
         pauseBtn.className = 'pixiv-dl-pause-btn';
@@ -669,18 +685,12 @@
             pauseBtn.classList.toggle('paused', isPaused);
         });
 
-        const countEl = document.createElement('div');
-        countEl.className = 'pixiv-dl-count';
-
         btnGroup.appendChild(btnContainer);
         btnGroup.appendChild(pauseBtn);
-        btnWrapper.appendChild(btnGroup);
-        btnWrapper.appendChild(countEl);
 
         btn.addEventListener('click', () => startDownload(btn, pauseBtn, progressBar, progressContainer, countEl, handle));
 
-        container.appendChild(btnWrapper);
-        container.appendChild(handle);
+        container.appendChild(btnGroup);
         document.body.appendChild(container);
 
         makeDraggable(container, handle);
