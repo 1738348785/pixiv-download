@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pixiv 漫画图片批量下载器
 // @namespace    http://tampermonkey.net/
-// @version      1.0.5
+// @version      1.0.6
 // @description  一键下载 Pixiv 作品的所有图片并打包为 ZIP（纯原生实现，无外部依赖）
 // @author       1738348785
 // @match        https://www.pixiv.net/artworks/*
@@ -23,6 +23,8 @@
     // ============ 状态管理 ============
     let isPaused = false;
     let isDownloading = false;
+    let isCancelled = false;
+    let currentIllustId = null;
 
     // ============ JavaScript ZIP============
 
@@ -517,6 +519,7 @@
         if (isDownloading) return;
         isDownloading = true;
         isPaused = false;
+        isCancelled = false;  // 重置取消状态
 
         btn.disabled = true;
         btn.classList.add('downloading');
@@ -558,10 +561,19 @@
             const failedList = []; // 记录失败的图片序号
 
             for (let i = 0; i < pages.length; i++) {
+                // 检查取消状态
+                if (isCancelled) {
+                    throw new Error('下载已取消');
+                }
+
                 // 检查暂停状态
                 if (isPaused) {
                     updateBtn(ICONS.pause, '已暂停');
                     await waitForResume();
+                    // 暂停恢复后再次检查取消状态
+                    if (isCancelled) {
+                        throw new Error('下载已取消');
+                    }
                 }
 
                 const url = pages[i].urls.original;
@@ -619,7 +631,10 @@
 
         } catch (err) {
             console.error('Pixiv Downloader Error:', err);
-            alert(`下载失败: ${err.message}`);
+            // 如果是用户取消的，不显示错误提示
+            if (!isCancelled) {
+                alert(`下载失败: ${err.message}`);
+            }
             btn.disabled = false;
             btn.classList.remove('downloading');
             pauseBtn.classList.remove('active');
@@ -721,30 +736,79 @@
         createFloatButton();
 
         let lastUrl = location.href;
+
+        // 重置按钮状态的函数
+        function resetButtonState() {
+            const btn = document.querySelector('.pixiv-dl-btn');
+            const progressContainer = document.querySelector('.pixiv-dl-progress');
+            const progressBar = document.querySelector('.pixiv-dl-progress-bar');
+            const countEl = document.querySelector('.pixiv-dl-count');
+            const handle = document.querySelector('.pixiv-dl-drag-handle');
+            const pauseBtn = document.querySelector('.pixiv-dl-pause-btn');
+
+            if (btn) {
+                btn.disabled = false;
+                btn.classList.remove('downloading', 'success');
+                btn.innerHTML = `${ICONS.download}<span>下载 ZIP</span>`;
+            }
+            if (progressContainer) progressContainer.classList.remove('active');
+            if (progressBar) progressBar.style.width = '0%';
+            if (countEl) countEl.classList.remove('active', 'success', 'error');
+            if (handle) handle.classList.remove('downloading', 'success');
+            if (pauseBtn) pauseBtn.classList.remove('active', 'paused');
+        }
+
+        // 监听 URL 变化
         const observer = new MutationObserver(() => {
             if (location.href !== lastUrl) {
-                lastUrl = location.href;
-                // 重置按钮状态
-                const btn = document.querySelector('.pixiv-dl-btn');
-                const progressContainer = document.querySelector('.pixiv-dl-progress');
-                const progressBar = document.querySelector('.pixiv-dl-progress-bar');
-                const countEl = document.querySelector('.pixiv-dl-count');
-                const handle = document.querySelector('.pixiv-dl-drag-handle');
-                const pauseBtn = document.querySelector('.pixiv-dl-pause-btn');
+                const newUrl = location.href;
 
-                if (btn && !isDownloading) {
-                    btn.disabled = false;
-                    btn.classList.remove('downloading', 'success');
-                    btn.innerHTML = `${ICONS.download}<span>下载 ZIP</span>`;
-                    if (progressContainer) progressContainer.classList.remove('active');
-                    if (progressBar) progressBar.style.width = '0%';
-                    if (countEl) countEl.classList.remove('active', 'success', 'error');
-                    if (handle) handle.classList.remove('downloading', 'success');
-                    if (pauseBtn) pauseBtn.classList.remove('active', 'paused');
+                // 如果正在下载，弹出确认提示
+                if (isDownloading) {
+                    // 暂停下载
+                    isPaused = true;
+                    const pauseBtn = document.querySelector('.pixiv-dl-pause-btn');
+                    if (pauseBtn) {
+                        pauseBtn.innerHTML = ICONS.play;
+                        pauseBtn.classList.add('paused');
+                    }
+
+                    const confirmed = confirm('正在下载中，切换页面将取消当前下载。\n\n点击"确定"取消下载并切换页面\n点击"取消"继续下载');
+
+                    if (confirmed) {
+                        // 用户确认取消下载
+                        isCancelled = true;
+                        isDownloading = false;
+                        isPaused = false;
+                        lastUrl = newUrl;
+                        resetButtonState();
+                        console.log('Pixiv Downloader: 下载已取消');
+                    } else {
+                        // 用户选择继续下载，恢复到原页面
+                        isPaused = false;
+                        if (pauseBtn) {
+                            pauseBtn.innerHTML = ICONS.pause;
+                            pauseBtn.classList.remove('paused');
+                        }
+                        // 尝试返回原页面
+                        history.back();
+                    }
+                } else {
+                    lastUrl = newUrl;
+                    resetButtonState();
                 }
             }
         });
         observer.observe(document, { subtree: true, childList: true });
+
+        // 监听页面关闭/刷新
+        window.addEventListener('beforeunload', (e) => {
+            if (isDownloading) {
+                e.preventDefault();
+                e.returnValue = '下载正在进行中，确定要离开吗？';
+                return e.returnValue;
+            }
+        });
     }
 
     if (document.readyState === 'loading') {
