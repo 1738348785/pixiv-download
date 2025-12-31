@@ -773,7 +773,7 @@
                         pauseBtn.classList.add('paused');
                     }
 
-                    const confirmed = confirm('正在下载中，切换页面将取消当前下载。\n\n点击"确定"取消下载并切换页面\n点击"取消"继续下载');
+                    const confirmed = confirm('正在下载中，切换页面将取消当前下载。\n\n点击"确定"取消下载并切换页面\n点击"取消"继续下载（在后台继续）');
 
                     if (confirmed) {
                         // 用户确认取消下载
@@ -784,14 +784,14 @@
                         resetButtonState();
                         console.log('Pixiv Downloader: 下载已取消');
                     } else {
-                        // 用户选择继续下载，恢复到原页面
+                        // 用户选择继续下载，让下载在后台继续
                         isPaused = false;
+                        lastUrl = newUrl;  // 更新 URL 避免重复触发
                         if (pauseBtn) {
                             pauseBtn.innerHTML = ICONS.pause;
                             pauseBtn.classList.remove('paused');
                         }
-                        // 尝试返回原页面
-                        history.back();
+                        console.log('Pixiv Downloader: 下载将在后台继续');
                     }
                 } else {
                     lastUrl = newUrl;
