@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pixiv 漫画图片批量下载器
 // @namespace    http://tampermonkey.net/
-// @version      1.0.7
+// @version      1.0.8
 // @description  一键下载 Pixiv 作品的所有图片并打包为 ZIP（纯原生实现，无外部依赖）
 // @author       1738348785
 // @match        https://www.pixiv.net/artworks/*
@@ -167,14 +167,17 @@
     // ============ 样式 ============
     const STYLES = `
         .pixiv-dl-float {
-            position: fixed;
-            z-index: 999999;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 6px;
-            user-select: none;
-            transition: opacity 0.3s ease;
+            position: fixed !important;
+            z-index: 2147483647 !important;
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: center !important;
+            gap: 6px !important;
+            user-select: none !important;
+            transition: opacity 0.3s ease !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+            pointer-events: auto !important;
         }
         .pixiv-dl-float:hover {
             opacity: 1 !important;
@@ -458,14 +461,30 @@
         let startX, startY, startLeft, startTop;
 
         const savedPos = GM_getValue('floatBtnPosition', null);
-        if (savedPos) {
+        // 验证保存的位置是否有效（在屏幕范围内）
+        const isValidPosition = savedPos &&
+            typeof savedPos.left === 'number' &&
+            typeof savedPos.top === 'number' &&
+            savedPos.left >= 0 &&
+            savedPos.top >= 0 &&
+            savedPos.left < window.innerWidth - 50 &&
+            savedPos.top < window.innerHeight - 50;
+
+        if (isValidPosition) {
             container.style.left = savedPos.left + 'px';
             container.style.top = savedPos.top + 'px';
             container.style.right = 'auto';
             container.style.bottom = 'auto';
         } else {
+            // 使用默认位置：右下角
             container.style.right = '30px';
             container.style.bottom = '120px';
+            container.style.left = 'auto';
+            container.style.top = 'auto';
+            // 清除无效的保存位置
+            if (savedPos) {
+                GM_setValue('floatBtnPosition', null);
+            }
         }
 
         handle.addEventListener('mousedown', (e) => {
@@ -723,8 +742,27 @@
                 }, 2000);
             }
         });
-
-        console.log('Pixiv Downloader V1.0: 悬浮按钮已创建');
+        // 打印调试信息
+        setTimeout(() => {
+            const rect = container.getBoundingClientRect();
+            const styles = window.getComputedStyle(container);
+            console.log('Pixiv Downloader: 悬浮按钮已创建');
+            console.log('按钮位置:', {
+                left: rect.left,
+                top: rect.top,
+                right: rect.right,
+                bottom: rect.bottom,
+                width: rect.width,
+                height: rect.height
+            });
+            console.log('按钮样式:', {
+                display: styles.display,
+                visibility: styles.visibility,
+                opacity: styles.opacity,
+                zIndex: styles.zIndex,
+                position: styles.position
+            });
+        }, 100);
     }
 
     // 初始化
@@ -851,7 +889,7 @@
         await new Promise(r => setTimeout(r, 500));
 
         init();
-        console.log('Pixiv Downloader V1.0.7: 初始化完成');
+        console.log('Pixiv Downloader: 初始化完成');
 
         // 监听 history 变化（SPA 路由）
         const originalPushState = history.pushState;
