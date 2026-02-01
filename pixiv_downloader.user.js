@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pixiv 漫画图片批量下载器
 // @namespace    http://tampermonkey.net/
-// @version      1.0.6
+// @version      1.0.7
 // @description  一键下载 Pixiv 作品的所有图片并打包为 ZIP（纯原生实现，无外部依赖）
 // @author       1738348785
 // @match        https://www.pixiv.net/artworks/*
@@ -14,7 +14,7 @@
 // @downloadURL  https://github.com/1738348785/pixiv-download/raw/refs/heads/main/pixiv_downloader.user.js
 // @connect      i.pximg.net
 // @connect      pixiv.net
-// @run-at       document-idle
+// @run-at       document-start
 // ==/UserScript==
 
 (function () {
@@ -729,9 +729,19 @@
 
     // 初始化
     function init() {
-        const styleEl = document.createElement('style');
-        styleEl.textContent = STYLES;
-        document.head.appendChild(styleEl);
+        // 注入样式
+        if (!document.querySelector('#pixiv-dl-styles')) {
+            const styleEl = document.createElement('style');
+            styleEl.id = 'pixiv-dl-styles';
+            styleEl.textContent = STYLES;
+            (document.head || document.documentElement).appendChild(styleEl);
+        }
+
+        // 确保在作品页面
+        if (!getIllustId()) {
+            console.log('Pixiv Downloader: 不在作品页面，跳过初始化');
+            return;
+        }
 
         createFloatButton();
 
@@ -797,6 +807,11 @@
                     lastUrl = newUrl;
                     resetButtonState();
                 }
+
+                // 如果切换到新的作品页面，确保按钮存在
+                if (getIllustId()) {
+                    createFloatButton();
+                }
             }
         });
         observer.observe(document, { subtree: true, childList: true });
@@ -811,11 +826,65 @@
         });
     }
 
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
-    } else {
-        init();
+    // 等待 DOM 准备好
+    function waitForBody() {
+        return new Promise(resolve => {
+            if (document.body) {
+                resolve();
+            } else {
+                const observer = new MutationObserver(() => {
+                    if (document.body) {
+                        observer.disconnect();
+                        resolve();
+                    }
+                });
+                observer.observe(document.documentElement, { childList: true });
+            }
+        });
     }
 
+    // 安全初始化 - 处理 SPA 和各种加载情况
+    async function safeInit() {
+        await waitForBody();
+
+        // 等待一小段时间确保页面基本元素加载
+        await new Promise(r => setTimeout(r, 500));
+
+        init();
+        console.log('Pixiv Downloader V1.0.7: 初始化完成');
+
+        // 监听 history 变化（SPA 路由）
+        const originalPushState = history.pushState;
+        const originalReplaceState = history.replaceState;
+
+        history.pushState = function (...args) {
+            originalPushState.apply(this, args);
+            setTimeout(() => {
+                if (getIllustId() && !document.querySelector('.pixiv-dl-float')) {
+                    createFloatButton();
+                }
+            }, 500);
+        };
+
+        history.replaceState = function (...args) {
+            originalReplaceState.apply(this, args);
+            setTimeout(() => {
+                if (getIllustId() && !document.querySelector('.pixiv-dl-float')) {
+                    createFloatButton();
+                }
+            }, 500);
+        };
+
+        window.addEventListener('popstate', () => {
+            setTimeout(() => {
+                if (getIllustId() && !document.querySelector('.pixiv-dl-float')) {
+                    createFloatButton();
+                }
+            }, 500);
+        });
+    }
+
+    safeInit();
 
 })();
+
